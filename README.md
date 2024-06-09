@@ -15,7 +15,7 @@
 2. **And install the script** (*from any one*)
     - ![Greasy Fork](https://www.google.com/s2/favicons?sz=16&domain=greasyfork.org) [Greasyfork.org](https://greasyfork.org/en/scripts/494079-kiitconnect-unlocker) or
 
-    - ![GitHub](https://www.google.com/s2/favicons?sz=8&domain=github.com) [Github](./kiitconnect-unlocker.js)
+    - ![GitHub](https://www.google.com/s2/favicons?sz=8&domain=github.com) [Github](https://github.com/rohitaryal/kiitconnect-unlocker/raw/main/kiitconnect-unlocker.user.js)
 
 
 > After installation <a href="https://www.kiitconnect.com/academic/PYQS/Content/Notes-csse-1?type=notes">Click Me</a> to see an instant demo.
