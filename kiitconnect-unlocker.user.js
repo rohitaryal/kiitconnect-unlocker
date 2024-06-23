@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KiitConnect Unlocker
 // @namespace    https://www.kiitconnect.com/
-// @version      2.1
+// @version      2.2
 // @license      MIT
 // @description  Free as in beer.
 // @author       erucix
@@ -15,7 +15,7 @@
   "use strict";
   // TODO: Make it false in production build or else code won't worlk.
 
-  let devModeFlag = false;
+  let devModeFlag = true;
 
   // If you find this flag as true please make it false.
 
@@ -28,85 +28,85 @@
       console.log("[+] Unlocker Initiated.");
     }
 
-    if (devModeFlag) {
-      let script = document.createElement("script");
-      script.src = "http://127.0.0.1:8080/kiit-connect.js";
-      document.body.appendChild(script);
-    } else {
-      // Removes a node and replaces with its clone and helps in removing all event listeners.
-      function remove(node) {
-        node.classList.remove("text-yellow-500", "cursor-not-allowed");
-        let cursorNotAllowedList = [
-          ...node.querySelectorAll(".cursor-not-allowed"),
-        ];
+    // Removes a node and replaces with its clone and helps in removing all event listeners.
+    function remove(node) {
+      node.classList.remove("text-yellow-500", "cursor-not-allowed");
+      let cursorNotAllowedList = [
+        ...node.querySelectorAll(".cursor-not-allowed"),
+      ];
 
-        cursorNotAllowedList.forEach((element) => {
-          element.classList.add("text-cyan-500");
-          element.classList.remove("text-yellow-500", "cursor-not-allowed");
-        });
+      cursorNotAllowedList.forEach((element) => {
+        element.classList.add("text-cyan-500");
+        element.classList.remove("text-yellow-500", "cursor-not-allowed");
+      });
 
-        if (node.innerText == "Not Available") {
-          node.classList.add("whitespace-nowrap", "font-bold", "text-gray-400");
-        } else {
-          node.classList.add("text-cyan-500");
-        }
-
-        var clonedNode = node.cloneNode(true);
-        node.parentNode.replaceChild(clonedNode, node);
+      if (node.innerText == "Not Available") {
+        node.classList.add("whitespace-nowrap", "font-bold", "text-gray-400");
+      } else {
+        node.classList.add("text-cyan-500");
       }
 
-      // Its a single paged application so continuously check for change in URL instead of onload.
-      setInterval(function () {
-        // Check if the script has already been loaded for given semester.
-        if (!document.head.classList.contains(location.pathname)) {
-          // Clear all the previous class list.
-          document.head.classList = "";
+      var clonedNode = node.cloneNode(true);
+      node.parentNode.replaceChild(clonedNode, node);
+    }
 
-          // Add a class value indicating the script has been loaded for this semester.
-          document.head.classList.add(location.pathname);
+    // Its a single paged application so continuously check for change in URL instead of onload.
+    setInterval(function () {
+      // Check if the script has already been loaded for given semester.
+      if (!document.head.classList.contains(location.pathname)) {
+        // Clear all the previous class list.
+        document.head.classList = "";
 
-          let docRequired; // Type of document required. Can be: notes, pyqs
-          let branchName; // Name of choosen branch. Can be: cse, csse, csce, it
-          let semesterId; // Semester representation in number. Can be any between 1 to 6
+        // Add a class value indicating the script has been loaded for this semester.
+        document.head.classList.add(location.pathname);
 
-          let finalPath = location.pathname;
+        let docRequired; // Type of document required. Can be: notes, pyqs
+        let branchName; // Name of choosen branch. Can be: cse, csse, csce, it
+        let semesterId; // Semester representation in number. Can be any between 1 to 6
 
-          // Assign values only if we have sufficient information in URL.
+        let finalPath = location.pathname;
 
-          if (
-            finalPath.includes("/academic/PYQS") &&
-            finalPath != "/academic/PYQS"
-          ) {
-            finalPath = finalPath.substring(finalPath.lastIndexOf("/") + 1);
-            finalPath = finalPath.split("-");
+        // Assign values only if we have sufficient information in URL.
 
-            docRequired = location.search.substring(
-              location.search.lastIndexOf("=") + 1
-            );
-            branchName = finalPath[1].toLowerCase();
-            semesterId = Number(finalPath[2]);
+        if (
+          finalPath.includes("/academic/PYQS") &&
+          finalPath != "/academic/PYQS"
+        ) {
+          finalPath = finalPath.substring(finalPath.lastIndexOf("/") + 1);
+          finalPath = finalPath.split("-");
 
-            // Fetching original source code so that we could get pdf links
+          docRequired = location.search.substring(
+            location.search.lastIndexOf("=") + 1
+          );
+          branchName = finalPath[1].toLowerCase();
+          semesterId = Number(finalPath[2]);
+
+          // Fetching original source code so that we could get pdf links
+          try {
             fetch(location.href)
               .then((data) => data.text())
               .then((data) => {
-                // Making some adjustments to successfully parse it as JSON
+                console.log(data);
 
-                let response = data.substring(data.lastIndexOf("1d:[\\") - 23);
-                response = response.replace("self.__next_f.push(", "");
-                response = response.substring(
-                  0,
-                  response.lastIndexOf(")</script>")
+                // Making some adjustments to successfully parse it as JSON
+                // Last issue was we replaced " with " because of data.replaceAll(`\"`, ``);
+                // nice rookie mistake
+
+                data = data.replaceAll(`\\"`, `"`);
+                data = data.replaceAll(`\\n`, ``);
+
+                data = data.substring(
+                  data.lastIndexOf(`self.__next_f.push([1,"1e:`) + 26,
+                  data.lastIndexOf(`"])</script`)
                 );
 
-                let firstLevelRefined = JSON.parse(response);
-                let secondLevelRefined = firstLevelRefined[1];
-                secondLevelRefined = secondLevelRefined.substring(3);
+                data = JSON.parse(data);
 
-                let thirdLevelRefined = JSON.parse(secondLevelRefined);
+                console.log(data);
 
-                let finalRefined =
-                  thirdLevelRefined[3].children[3].data.semesters[0].subjects;
+                data = data[3].children[3].data.semesters[0].subjects;
+
+                let finalRefined = data;
 
                 if (devModeFlag) {
                   console.log(finalRefined);
@@ -242,17 +242,19 @@
                   });
                 }
               });
+          } catch (e) {
+            console.log(e);
           }
-
-          // Remove all get premium buttons from site.
-          setTimeout(function () {
-            let premiumButtons = document.querySelectorAll(
-              "a[href='/premiuminfo']"
-            );
-            premiumButtons.forEach((item) => item.remove());
-          }, 1000);
         }
-      }, 500);
-    }
+
+        // Remove all get premium buttons from site.
+        setTimeout(function () {
+          let premiumButtons = document.querySelectorAll(
+            "a[href='/premiuminfo']"
+          );
+          premiumButtons.forEach((item) => item.remove());
+        }, 1000);
+      }
+    }, 500);
   };
 })();
