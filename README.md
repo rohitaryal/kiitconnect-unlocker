@@ -1,6 +1,9 @@
 ## KiitConnect Unlocker 🪽
  Unlocks most of the paid 💸 contents of kiitconnect.com
 
+<h3>NOTE: THIS VERSION DOESN'T WORK. PLEASE WAIT FOR NEXT UPDATE.</h3>
+
+
  ### 🤌 Installation:
  1. **Install a userscript-manager** (*any one*)
 
