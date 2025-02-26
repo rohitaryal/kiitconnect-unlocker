@@ -1,260 +1,269 @@
 // ==UserScript==
-// @name         KiitConnect Unlocker
-// @namespace    https://www.kiitconnect.com/
-// @version      2.2
-// @license      MIT
-// @description  Free as in beer.
-// @author       erucix
-// @match        https://www.kiitconnect.com/*
+// @name         KIIT-Connect Unlocker
+// @namespace    https://github.com/rohitaryal/kiitconnect-unlocker
+// @version      3.0
+// @description  Unlock kiitconnect for free
+// @author       rohitaryal
+// @match        https://www.kiitconnect.com/academic/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=kiitconnect.com
-// @downloadURL https://update.greasyfork.org/scripts/494079/KiitConnect%20Unlocker.user.js
-// @updateURL https://update.greasyfork.org/scripts/494079/KiitConnect%20Unlocker.meta.js
+// @grant        none
 // ==/UserScript==
 
-(function () {
-  "use strict";
-  // TODO: Make it false in production build or else code won't worlk.
+const debugMode = true;
 
-  let devModeFlag = true;
+const driveFile = "https://drive.google.com/file/d/";
+const driveFolder = "https://drive.google.com/drive/folders/";
+const youtubePlaylist = "https://www.kiitconnect.com/player?playlistId=";
 
-  // If you find this flag as true please make it false.
+const pyqsRegex = /academic\/PYQS\/Content\/PYQS\-(cse|csse|csce|it)\-[1-7]/;
+const notesRegex = /academic\/PYQS\/Content\/Notes\-(cse|csse|csce|it)\-[1-7]/;
 
-  // It is only for dev for debugging purpose and won't give you any
-  // super powers
+class Utils {
+  constructor() { }
+  /*
+   * Get all script that doesn't have src attribute
+   */
+  static getScripts() {
+    let scriptElements = document.querySelectorAll("script:not([src])");
+    return [...scriptElements];
+  }
 
-  window.onload = function () {
-    if (devModeFlag) {
-      console.clear();
-      console.log("[+] Unlocker Initiated.");
+  /*
+   * Copy item to clipboard
+   */
+  static copy(text) {
+    document.body.focus();
+    navigator.clipboard.writeText(text);
+  }
+
+  /*
+   * Logger for debug mode
+   */
+  static log(text) {
+    if (debugMode) {
+      console.log(text)
+    }
+  }
+
+  /*
+   * Clone node and remove its junk and replace with new one
+   */
+  static replaceNode(node) {
+    if (!node) {
+      throw new Error("Invalid node provided to clone");
     }
 
-    // Removes a node and replaces with its clone and helps in removing all event listeners.
-    function remove(node) {
-      node.classList.remove("text-yellow-500", "cursor-not-allowed");
-      let cursorNotAllowedList = [
-        ...node.querySelectorAll(".cursor-not-allowed"),
-      ];
+    const newNode = node.cloneNode(true);
+    node.replaceWith(newNode);
 
-      cursorNotAllowedList.forEach((element) => {
-        element.classList.add("text-cyan-500");
-        element.classList.remove("text-yellow-500", "cursor-not-allowed");
+    return newNode;
+  }
+
+  /*
+   * Re-Serialize the json in our own way (For PYQS)
+   */
+  static parsePYQ(data) {
+    if (typeof data !== 'object') {
+      throw new Error(`Expected 'object' but obtained '${typeof data}' while parsing`);
+    }
+
+    // Skeleton for subjects pyq, syllabus + some extra detail holder
+    let pyqDetails = {
+      semester: data.semeseter, // Yes, thats the actual spelling
+      branch: data.stream,
+      subjects: [],
+    };
+
+    pyqDetails.subjects = data.data.semesters[0].subjects.map((subject) => {
+      // Skeleton for subject detail holder
+      let subDetails = {
+        subjectName: subject.name,
+        subjectCode: subject.SUBCODE,
+        folder: driveFolder + subject.folderId, // Makes an accessable drive folder link
+        subjectSyllabus: driveFile + subject.syllabus, // Makes an accessable drive file link
+        playlist: [],
+        papers: [],
+      };
+
+      // Parse individual playlist
+      subDetails.playlist = subject.youtubePlaylist.map((playlist) => {
+        return {
+          id: playlist.id,
+          title: playlist.title,
+          videoCount: playlist.noOfVides,
+          videoLink: `${youtubePlaylist}id&playlist=${playlist.title}`
+        };
       });
 
-      if (node.innerText == "Not Available") {
-        node.classList.add("whitespace-nowrap", "font-bold", "text-gray-400");
-      } else {
-        node.classList.add("text-cyan-500");
-      }
+      // Parse individual pyqs
+      subDetails.papers = subject.pyqs.map((paper) => {
+        return {
+          name: paper.name,
+          year: Number(paper.year) || 0,
+          solution: driveFile + paper.solution, // Makes an accessable file link
+          question: driveFile + paper.Question, // Same
+        }
+      });
 
-      var clonedNode = node.cloneNode(true);
-      node.parentNode.replaceChild(clonedNode, node);
+      // Sort papers based on years
+      subDetails.papers = subDetails.papers.sort((a, b) => a.year - b.year);
+
+      return subDetails;
+    });
+
+    return pyqDetails;
+  }
+
+  /*
+   * Re-Serialize the json in our own way (For Notes)
+   */
+  static parseNotes(data) {
+
+  }
+
+  /*
+   * Parse script content (For PYQS)
+   */
+  static parseFromScriptPYQ(scriptContent) {
+    // Pre-process and beautufy
+    scriptContent = scriptContent.replaceAll(`\\"`, `"`);
+    scriptContent = scriptContent.replaceAll(`\\n`, ``);
+
+    const parsableContent = scriptContent.slice(
+      scriptContent.indexOf(`self.__next_f.push([1,"1e:`) + 26, // <-- 26 is the length of this
+      scriptContent.lastIndexOf(`"])`)                          //     string itself.
+    );
+
+    const jsonContent = JSON.parse(parsableContent)[3].children[3];
+
+    return this.parsePYQ(jsonContent);
+  }
+
+  /*
+   * Parse script content (For Notes)
+   */
+  static parseFromScriptNotes(scriptContent) {
+
+  }
+
+  /*
+   * Replace pyq table + headings with from our own serialized form
+   */
+  static rewritePYQPage(subjectArray) {
+    if (typeof subjectArray !== 'object') {
+      throw new Error(`Expected 'object' but obtained '${typeof subjectArray}' while rewriting`);
     }
 
-    // Its a single paged application so continuously check for change in URL instead of onload.
-    setInterval(function () {
-      // Check if the script has already been loaded for given semester.
-      if (!document.head.classList.contains(location.pathname)) {
-        // Clear all the previous class list.
-        document.head.classList = "";
+    // After successful injection head will contain this classlist
+    // which is an indicator to stop further injection
+    if(document.head.classList.contains("injected")) {
+      return;
+    }
 
-        // Add a class value indicating the script has been loaded for this semester.
-        document.head.classList.add(location.pathname);
+    Utils.log("Re-writing the pyq page.")
 
-        let docRequired; // Type of document required. Can be: notes, pyqs
-        let branchName; // Name of choosen branch. Can be: cse, csse, csce, it
-        let semesterId; // Semester representation in number. Can be any between 1 to 6
-
-        let finalPath = location.pathname;
-
-        // Assign values only if we have sufficient information in URL.
-
-        if (
-          finalPath.includes("/academic/PYQS") &&
-          finalPath != "/academic/PYQS"
-        ) {
-          finalPath = finalPath.substring(finalPath.lastIndexOf("/") + 1);
-          finalPath = finalPath.split("-");
-
-          docRequired = location.search.substring(
-            location.search.lastIndexOf("=") + 1
-          );
-          branchName = finalPath[1].toLowerCase();
-          semesterId = Number(finalPath[2]);
-
-          // Fetching original source code so that we could get pdf links
-          try {
-            fetch(location.href)
-              .then((data) => data.text())
-              .then((data) => {
-                console.log(data);
-
-                // Making some adjustments to successfully parse it as JSON
-                // Last issue was we replaced " with " because of data.replaceAll(`\"`, ``);
-                // nice rookie mistake
-
-                data = data.replaceAll(`\\"`, `"`);
-                data = data.replaceAll(`\\n`, ``);
-
-                data = data.substring(
-                  data.lastIndexOf(`self.__next_f.push([1,"1e:`) + 26,
-                  data.lastIndexOf(`"])</script`)
-                );
-
-                data = JSON.parse(data);
-
-                console.log(data);
-
-                data = data[3].children[3].data.semesters[0].subjects;
-
-                let finalRefined = data;
-
-                if (devModeFlag) {
-                  console.log(finalRefined);
-                }
-
-                if (docRequired == "pyqs") {
-                  // Sort the list according to year
-                  finalRefined.forEach((element) => {
-                    element.pyqs.sort((a, b) => {
-                      return Number(a.year) - Number(b.year);
-                    });
-                  });
-
-                  if (devModeFlag) {
-                    console.log(finalRefined);
-                  }
-
-                  let containerTables = document.querySelectorAll("table");
-
-                  // Used for storing loaded table indexes. SO don't touch the table
-                  // again later.
-                  let storedIndexArray = [];
-
-                  containerTables.forEach((element) => {
-                    let tableRowItems = [...element.querySelectorAll("tr")];
-
-                    // Since the first 'tr' is table header
-
-                    tableRowItems.shift();
-
-                    // Find a table such that the [numbers of paper we have] = [number of rows in table]
-                    // This reduces hassle of creating a new table
-
-                    let index = 0;
-
-                    for (let i = 0; i < finalRefined.length; i++) {
-                      //           Here we dont touch the loaded table
-                      if (
-                        finalRefined[i].pyqs.length == tableRowItems.length &&
-                        !storedIndexArray.includes(i)
-                      ) {
-                        index = i;
-                        storedIndexArray.push(i);
-                        break;
-                      }
-                    }
-
-                    let choosenSubject = finalRefined[index].pyqs;
-
-                    // Overwrite the 'td' values by our better sorted list
-                    tableRowItems.forEach((item, index1) => {
-                      let tdList = item.querySelectorAll("td");
-
-                      tdList[0].innerText = choosenSubject[index1].year;
-                      tdList[1].innerText = choosenSubject[index1].type;
-
-                      let anchor1 = tdList[2].querySelector("a");
-                      anchor1.innerText = choosenSubject[index1].name;
-                      anchor1.href =
-                        "https://drive.google.com/file/d/" +
-                        choosenSubject[index1].Question;
-
-                      // Replace the anchor
-                      remove(anchor1);
-
-                      let anchor2 = tdList[3].querySelector("a");
-
-                      if (choosenSubject[index1].solution != null) {
-                        if (anchor2 == null) {
-                          anchor2 = document.createElement("a");
-                          anchor2.target = "_blank";
-
-                          tdList[3].innerText = "";
-                          tdList[3].appendChild(anchor2);
-                        }
-
-                        anchor2.innerText = "Solution";
-                        anchor2.href =
-                          "https://drive.google.com/file/d/" +
-                          choosenSubject[index1].solution;
-                      } else {
-                        if (anchor2 != null) {
-                          anchor2.innerHTML = "Not Available";
-                        }
-                      }
-
-                      if (anchor2 != null) {
-                        remove(anchor2);
-                      }
-                    });
-                  });
-                } else if (docRequired == "notes") {
-                  let subjectNoteContainer = [
-                    ...document
-                      .querySelector("main")
-                      .querySelector("div")
-                      .querySelector("div").childNodes,
-                  ];
-
-                  // Since first one is unwanted jargon div.
-                  subjectNoteContainer.shift();
-
-                  // Store manipulated div that should not be re-touched.
-
-                  let storedIndexArray = [];
-
-                  subjectNoteContainer.forEach((element) => {
-                    let allHeadings = [...element.querySelectorAll("h1")];
-
-                    let index = 0;
-
-                    for (let i = 0; i < finalRefined.length; i++) {
-                      if (
-                        finalRefined[i].notes.length == allHeadings.length &&
-                        !storedIndexArray.includes(i)
-                      ) {
-                        index = i;
-                        storedIndexArray.push(i);
-                        break;
-                      }
-                    }
-
-                    let currentSubject = finalRefined[index].notes;
-
-                    allHeadings.forEach((element, index1) => {
-                      element.parentElement.parentElement.href =
-                        "https://drive.google.com/file/d/" +
-                        currentSubject[index1].Notes;
-                      element.innerText = currentSubject[index1].name;
-
-                      remove(element.parentElement.parentElement);
-                    });
-                  });
-                }
-              });
-          } catch (e) {
-            console.log(e);
+    const parentContainer = [...document.querySelector("main div div").childNodes].slice(1);
+    
+    for (let i = 0; i < parentContainer.length; i++) {
+      let totalRows = parentContainer[i].querySelectorAll("table tbody").length; // Get count of rows
+      for (let j = 0; j < subjectArray.length; j++) {
+          let totalPapers = subjectArray[j].papers.length;
+  
+          if (totalRows === totalPapers) {
+              let temp = subjectArray[j];
+              subjectArray[j] = subjectArray[i];
+              subjectArray[i] = temp;
+              break;
           }
-        }
-
-        // Remove all get premium buttons from site.
-        setTimeout(function () {
-          let premiumButtons = document.querySelectorAll(
-            "a[href='/premiuminfo']"
-          );
-          premiumButtons.forEach((item) => item.remove());
-        }, 1000);
       }
-    }, 500);
-  };
+  }
+  
+
+    for (let i = 0; i < subjectArray.length; i++) {
+      const subject = subjectArray[i];
+      const parent = parentContainer[i];
+      const [titleDiv, tableContainer] = parent.childNodes;
+
+      const syllabusButton = titleDiv.querySelector("a");
+      syllabusButton.href = subject.subjectSyllabus;
+
+      // New button with folder link
+      const folderButton = syllabusButton.cloneNode(true);
+      folderButton.innerText = "Open Folder";
+      folderButton.href = subject.folder;
+
+      
+      // Modify title (middle one is TEXT_NODE)
+      const title = titleDiv.childNodes[1];
+      title.textContent = subject.subjectName;
+      
+      // Modify the table
+      const tableRows = tableContainer.querySelectorAll("table tbody");
+
+      for (let j = 0; j < tableRows.length; j++) {
+        const row = tableRows[j];
+        const paper = subject.papers[j];
+
+        const td = row.querySelectorAll("td:not(.hidden)");
+
+        // Year of paper
+        td[0].textContent = paper.year;
+
+        // Link to question paper
+        let paperAnchor = td[1].querySelector("a");
+        paperAnchor = this.replaceNode(paperAnchor);
+
+        paperAnchor.textContent = paper.name;
+        paperAnchor.href = paper.question;
+        paperAnchor.classList.add("text-cyan-500");
+        paperAnchor.classList.remove("text-yellow-500", "cursor-not-allowed");
+
+        // Link to solution paper
+        let solutionAnchor = td[2].querySelector("a");
+
+        // Since solution is the last element
+        if(!solutionAnchor)
+          continue;
+
+        solutionAnchor = this.replaceNode(solutionAnchor);
+
+        if (solutionAnchor.classList.contains("text-gray-400")) {
+          solutionAnchor.textContent = "Not Available";
+        } else {
+          solutionAnchor.classList.add("text-cyan-500");
+          solutionAnchor.classList.remove("text-yellow-500", "cursor-not-allowed");
+
+          solutionAnchor.href = paper.solution
+        }
+      }
+    }
+
+    // Mark as succrssful injection
+    document.head.classList.add("injected");
+  }
+}
+
+(function () {
+  'use strict';
+  // Last script will always contain the paper's JSON
+  let scriptContent = Utils.getScripts().at(-1).textContent;
+
+
+  if (!!location.pathname.match(pyqsRegex)) { // Means we are in 'pyqs' page
+    const parsedContent = Utils.parseFromScriptPYQ(scriptContent);
+
+    window.addEventListener('load', function () {
+      Utils.log("DOMContent has been loaded");
+      this.setInterval(function () {
+        try {
+          Utils.rewritePYQPage(parsedContent.subjects);
+        } catch(e) {
+          console.log(e)
+        }
+      }, 2000)
+    });
+
+  } else if (!!location.pathname.match(notesRegex)) { // Means we are in 'notes' page
+
+  }
 })();
