@@ -1,7 +1,10 @@
 ## KiitConnect Unlocker 🪽
  Unlocks most of the paid 💸 contents of kiitconnect.com
 
-<h3>NOTE: THIS VERSION DOESN'T WORK. PLEASE WAIT FOR NEXT UPDATE.</h3>
+<h3>
+ Note: This script doesn't work.
+ OR: Use this for free qn papers and solns: <a href="https://rohitaryal.github.io/paper/">rohitaryal.github.io/paper</a>
+</h3>
 
 
  ### 🤌 Installation:
