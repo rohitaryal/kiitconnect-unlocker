@@ -2,7 +2,7 @@
  Unlocks most of the paid 💸 contents of kiitconnect.com
 
 <h3>
- Note: This script doesn't work.
+ Note: This script doesn't work. <br><br>
  OR: Use this for free qn papers and solns: <a href="https://rohitaryal.github.io/paper/">rohitaryal.github.io/paper</a>
 </h3>
 
